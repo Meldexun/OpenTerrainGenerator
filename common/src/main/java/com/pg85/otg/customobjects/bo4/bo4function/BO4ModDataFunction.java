@@ -25,11 +25,11 @@ public class BO4ModDataFunction extends ModDataFunction<BO4Config>
     {
     	BO4ModDataFunction rotatedBlock = new BO4ModDataFunction(this.getHolder());
 
-        BO4CustomStructureCoordinate rotatedCoords = BO4CustomStructureCoordinate.getRotatedBO3CoordsJustified(x, y, z, rotation);
+        BO4CustomStructureCoordinate rotatedCoords = BO4CustomStructureCoordinate.getRotatedBO3CoordsJustified(x(), y(), z(), rotation);
 
-        rotatedBlock.x = rotatedCoords.getX();
-        rotatedBlock.y = rotatedCoords.getY();
-        rotatedBlock.z = rotatedCoords.getZ();
+        rotatedBlock.x(rotatedCoords.getX());
+        rotatedBlock.y(rotatedCoords.getY());
+        rotatedBlock.z(rotatedCoords.getZ());
 
         rotatedBlock.modId = modId;
         rotatedBlock.modData = modData;
@@ -51,9 +51,9 @@ public class BO4ModDataFunction extends ModDataFunction<BO4Config>
 	
     public void writeToStream(DataOutput stream) throws IOException
     {
-        stream.writeInt(this.x);
-        stream.writeInt(this.y);
-        stream.writeInt(this.z);
+        stream.writeInt(this.x());
+        stream.writeInt(this.y());
+        stream.writeInt(this.z());
         
         StreamHelper.writeStringToStream(stream, this.modId);
         StreamHelper.writeStringToStream(stream, this.modData);
@@ -63,9 +63,9 @@ public class BO4ModDataFunction extends ModDataFunction<BO4Config>
     {
     	BO4ModDataFunction modDataFunction = new BO4ModDataFunction(holder);
     	
-    	modDataFunction.x = buffer.getInt();
-    	modDataFunction.y = buffer.getInt();
-    	modDataFunction.z = buffer.getInt();
+    	modDataFunction.x(buffer.getInt());
+    	modDataFunction.y(buffer.getInt());
+    	modDataFunction.z(buffer.getInt());
     	
     	modDataFunction.modId = StreamHelper.readStringFromBuffer(buffer);
     	modDataFunction.modData = StreamHelper.readStringFromBuffer(buffer);

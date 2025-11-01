@@ -4,6 +4,7 @@ import java.io.DataOutput;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Random;
 
 import com.pg85.otg.common.LocalMaterialData;
@@ -12,6 +13,7 @@ import com.pg85.otg.customobjects.bo3.BO3Loader;
 import com.pg85.otg.customobjects.bo4.BO4Config;
 import com.pg85.otg.customobjects.bofunctions.BlockFunction;
 import com.pg85.otg.customobjects.structures.bo4.BO4CustomStructureCoordinate;
+import com.pg85.otg.exception.InvalidConfigException;
 import com.pg85.otg.util.ChunkCoordinate;
 import com.pg85.otg.util.bo3.Rotation;
 
@@ -26,7 +28,34 @@ public class BO4BlockFunction extends BlockFunction<BO4Config>
     {
     	this.holder = holder;
     }
-    	
+
+    @Override
+    public void load(List<String> args) throws InvalidConfigException
+    {
+        assureSize(4, args);
+        // Those limits are arbitrary, LocalWorld.setBlock will limit it
+        // correctly based on what chunks can be accessed
+        x(readInt(args.get(0), -100, 100));
+        y((short) readInt(args.get(1), -1000, 1000));
+        z(readInt(args.get(2), -100, 100));
+
+        material = readMaterial(args.get(3));
+       
+        if(material == null)
+        {
+            throw new InvalidConfigException("Material \"" + args.get(3) + "\" could not be read.");
+        }
+        
+        if (args.size() == 5)
+        {
+            metaDataTag = BO3Loader.loadMetadata(args.get(4), getHolder().getFile());
+            if (metaDataTag != null)
+            {
+                metaDataName = args.get(4);
+            }
+        }
+    }
+
     @Override
     public void spawn(LocalWorld world, Random random, int x, int y, int z, ChunkCoordinate chunkBeingPopulated, boolean replaceBlock)
     {
@@ -39,11 +68,11 @@ public class BO4BlockFunction extends BlockFunction<BO4Config>
 
         rotatedBlock.material = material; // TODO: Make sure this won't cause problems
 
-        BO4CustomStructureCoordinate rotatedCoords = BO4CustomStructureCoordinate.getRotatedBO3CoordsJustified(x, y, z, rotation);
+        BO4CustomStructureCoordinate rotatedCoords = BO4CustomStructureCoordinate.getRotatedBO3CoordsJustified(x(), y(), z(), rotation);
 
-        rotatedBlock.x = rotatedCoords.getX();
-        rotatedBlock.y = rotatedCoords.getY();
-        rotatedBlock.z = rotatedCoords.getZ();
+        rotatedBlock.x(rotatedCoords.getX());
+        rotatedBlock.y(rotatedCoords.getY());
+        rotatedBlock.z(rotatedCoords.getZ());
 
     	// TODO: This makes no sense, why is rotation inverted??? Should be: NORTH:0,WEST:1,SOUTH:2,EAST:3
 
@@ -75,7 +104,7 @@ public class BO4BlockFunction extends BlockFunction<BO4Config>
         
     public void writeToStream(String[] metaDataNames, LocalMaterialData[] materials, DataOutput stream) throws IOException
     {
-        stream.writeShort(this.y);
+        stream.writeShort(this.y());
         boolean bFound = false;
         if(this.material != null)
         {
@@ -118,9 +147,9 @@ public class BO4BlockFunction extends BlockFunction<BO4Config>
     	
     	File file = holder.getFile();
     	   	
-    	rbf.x = x;
-    	rbf.y = buffer.getShort();
-    	rbf.z = z;
+    	rbf.x(x);
+    	rbf.y(buffer.getShort());
+    	rbf.z(z);
     	
     	short materialId = buffer.getShort();
     	if(materialId != -1)
