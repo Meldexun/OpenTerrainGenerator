@@ -5,10 +5,8 @@ import static com.pg85.otg.util.ChunkCoordinate.CHUNK_SIZE;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.Map.Entry;
 
-import com.pg85.otg.OTG;
 import com.pg85.otg.common.LocalBiome;
 import com.pg85.otg.common.LocalMaterialData;
 import com.pg85.otg.configuration.standard.PluginStandardValues;
@@ -21,7 +19,6 @@ import com.pg85.otg.forge.world.ForgeWorld;
 import com.pg85.otg.generator.ChunkProviderOTG;
 import com.pg85.otg.generator.ObjectSpawner;
 import com.pg85.otg.generator.biome.OutputType;
-import com.pg85.otg.logging.LogMarker;
 import com.pg85.otg.network.ConfigProvider;
 import com.pg85.otg.util.BlockPos2D;
 import com.pg85.otg.util.ChunkCoordinate;
@@ -31,8 +28,8 @@ import com.pg85.otg.util.minecraft.defaults.DefaultMaterial;
 
 import net.minecraft.block.BlockGravel;
 import net.minecraft.block.BlockSand;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EnumCreatureType;
-import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.datafix.DataFixer;
@@ -44,7 +41,6 @@ import net.minecraft.world.biome.Biome.SpawnListEntry;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.IChunkGenerator;
-import net.minecraftforge.common.util.Constants.BlockFlags;
 import net.minecraftforge.fml.common.event.FMLInterModComms;
 
 public class OTGChunkGenerator implements IChunkGenerator
@@ -53,16 +49,16 @@ public class OTGChunkGenerator implements IChunkGenerator
     private ForgeWorld world;
     private ChunkProviderOTG chunkProviderOTG;
     public ObjectSpawner spawner;
-    
+
     // Caches
-	private LRUCache<BlockPos2D, LocalMaterialData[]> unloadedBlockColumnsCache;
-	private LRUCache<ChunkCoordinate, Chunk> unloadedChunksCache;
+    private LRUCache<BlockPos2D, LocalMaterialData[]> unloadedBlockColumnsCache;
+    private LRUCache<ChunkCoordinate, Chunk> unloadedChunksCache;
     ForgeChunkBuffer chunkBuffer;
     Object chunkBufferLock = new Object();
     //
 
     private	DataFixer dataFixer = DataFixesManager.createFixer();
-    
+
     public OTGChunkGenerator(ForgeWorld _world)
     {
         this.world = _world;
@@ -71,13 +67,13 @@ public class OTGChunkGenerator implements IChunkGenerator
 
         this.chunkProviderOTG = new ChunkProviderOTG(this.world.getConfigs(), this.world);
         this.spawner = new ObjectSpawner(this.world.getConfigs(), this.world);
-        // TODO: Add a setting to the worldconfig for the size of these caches. 
-        // Worlds with lots of BO4's and large smoothing areas may want to increase this. 
+        // TODO: Add a setting to the worldconfig for the size of these caches.
+        // Worlds with lots of BO4's and large smoothing areas may want to increase this.
         this.unloadedBlockColumnsCache = new LRUCache<BlockPos2D, LocalMaterialData[]>(1024);
         this.unloadedChunksCache = new LRUCache<ChunkCoordinate, Chunk>(1024); //Changed 128 chunks cache to 1024 chunks cache for customstructures
     }
-    
-	// Chunks
+
+    // Chunks
 
     @Override
     public Chunk generateChunk(int chunkX, int chunkZ)
@@ -108,7 +104,7 @@ public class OTGChunkGenerator implements IChunkGenerator
     {
         ChunkCoordinate chunkCoord = ChunkCoordinate.fromChunkCoords(chunkX, chunkZ);
         this.unloadedChunksCache.remove(chunkCoord);
-    	if(this.testMode)
+        if(this.testMode)
         {
             return;
         }
@@ -124,42 +120,42 @@ public class OTGChunkGenerator implements IChunkGenerator
         HashMap<String,ArrayList<ModDataFunction<?>>> MessagesPerMod = world.getWorldSession().getModDataForChunk(chunkCoord);
         if(MessagesPerMod != null && MessagesPerMod.entrySet().size() > 0)
         {
-        	for(Entry<String, ArrayList<ModDataFunction<?>>> modNameAndData : MessagesPerMod.entrySet())
-        	{
-        		String messageString = "";
-				if(modNameAndData.getKey().equals("OTG"))
-				{
-	    			for(ModDataFunction<?> modData : modNameAndData.getValue())
-	    			{
-						String[] paramString2 = modData.modData.split("\\/");
+            for(Entry<String, ArrayList<ModDataFunction<?>>> modNameAndData : MessagesPerMod.entrySet())
+            {
+                String messageString = "";
+                if(modNameAndData.getKey().equals("OTG"))
+                {
+                    for(ModDataFunction<?> modData : modNameAndData.getValue())
+                    {
+                        String[] paramString2 = modData.modData.split("\\/");
 
-						if(paramString2.length > 1)
-						{
-							if(paramString2[0].equals("mob"))
-							{
-								boolean autoSpawn = paramString2.length > 4 ? Boolean.parseBoolean(paramString2[4]) : false;
-	    	    				if(autoSpawn)
-	    	    				{
-	    	    					messageString += "[" + modData.x() + "," + modData.y() + "," + modData.z() + "," + modData.modData + "]";
-	    	    				}
-							}
-						}
-	    			}
-				} else {
-	    			for(ModDataFunction<?> modData : modNameAndData.getValue())
-	    			{
-    					messageString += "[" + modData.x() + "," + modData.y() + "," + modData.z() + "," + modData.modData + "]";
-	    			}
-				}
-    			if(messageString.length() > 0)
-    			{
-    				// Send messages to any mods listening
-    				FMLInterModComms.sendRuntimeMessage(OTGPlugin.Instance, modNameAndData.getKey(), "ModData", "[" + "[" + world.getName() + "," + chunkX + "," + chunkZ + "]" + messageString + "]");
-    			}
-        	}
+                        if(paramString2.length > 1)
+                        {
+                            if(paramString2[0].equals("mob"))
+                            {
+                                boolean autoSpawn = paramString2.length > 4 ? Boolean.parseBoolean(paramString2[4]) : false;
+                                if(autoSpawn)
+                                {
+                                    messageString += "[" + modData.x() + "," + modData.y() + "," + modData.z() + "," + modData.modData + "]";
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for(ModDataFunction<?> modData : modNameAndData.getValue())
+                    {
+                        messageString += "[" + modData.x() + "," + modData.y() + "," + modData.z() + "," + modData.modData + "]";
+                    }
+                }
+                if(messageString.length() > 0)
+                {
+                    // Send messages to any mods listening
+                    FMLInterModComms.sendRuntimeMessage(OTGPlugin.Instance, modNameAndData.getKey(), "ModData", "[" + "[" + world.getName() + "," + chunkX + "," + chunkZ + "]" + messageString + "]");
+                }
+            }
         }
     }
-       
+
     // If allowOutsidePopulatingArea then normal OTG rules are used:
     // returns any chunk that is inside the area being populated.
     // returns null for chunks outside the populated area if populationBoundsCheck=true
@@ -169,14 +165,14 @@ public class OTGChunkGenerator implements IChunkGenerator
     // returns any chunk that is inside the area being populated. TODO: Or any chunk that is cached, which technically should only be chunks that are in the populated area. Cached chunks could also be from the previously populated area, fix that?
     // returns any loaded chunk outside the populated area
     // throws an exception if any unloaded chunk outside the populated area is requested or if a loaded chunk could not be queried.
-    
+
     public Chunk getChunk(int x, int z)
     {
         return this.world.world.getChunk(x >> 4, z >> 4);
     }
 
     // Blocks
-    
+
     /**
      * Fills the biome array of a chunk with the proper saved ids (no
      * generation ids).
@@ -189,15 +185,15 @@ public class OTGChunkGenerator implements IChunkGenerator
         int[] biomeShortArray = this.world.getBiomeGenerator().getBiomes(null, chunk.x * CHUNK_SIZE, chunk.z * CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, OutputType.DEFAULT_FOR_WORLD);
         int generationId;
         LocalBiome biome;
-        
+
         for (int i = 0; i < chunkBiomeArray.length; i++)
         {
             generationId = biomeShortArray[i];
             biome = configProvider.getBiomeByOTGIdOrNull(generationId);
-        	chunkBiomeArray[i] = (byte) biome.getIds().getSavedId();
+            chunkBiomeArray[i] = (byte) biome.getIds().getSavedId();
         }
     }
-    
+
     public LocalMaterialData[] getBlockColumnInUnloadedChunk(int x, int z)
     {
         Chunk chunk = this.world.world.getChunkProvider().getLoadedChunk(x >> 4, z >> 4);
@@ -227,45 +223,45 @@ public class OTGChunkGenerator implements IChunkGenerator
         }
         return blockColumn;
     }
-    
+
     public double getBiomeBlocksNoiseValue(int blockX, int blockZ)
     {
-    	return this.chunkProviderOTG.getBiomeBlocksNoiseValue(blockX, blockZ);
+        return this.chunkProviderOTG.getBiomeBlocksNoiseValue(blockX, blockZ);
     }
-    
+
     public LocalMaterialData getMaterialInUnloadedChunk(int x, int y, int z)
     {
-    	LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
+        LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
         return blockColumn[y];
     }
 
     public int getHighestBlockYInUnloadedChunk(int x, int z, boolean findSolid, boolean findLiquid, boolean ignoreLiquid, boolean ignoreSnow)
     {
-    	int height = -1;
+        int height = -1;
 
-    	LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
-    	ForgeMaterialData material;
-    	boolean isLiquid;
-    	boolean isSolid;
-    	
+        LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
+        ForgeMaterialData material;
+        boolean isLiquid;
+        boolean isSolid;
+
         for(int y = 255; y > -1; y--)
         {
-        	material = (ForgeMaterialData) blockColumn[y];
-        	isLiquid = material.isLiquid();
-        	isSolid = material.isSolid() || (!ignoreSnow && material.isMaterial(DefaultMaterial.SNOW));
-        	if(!(isLiquid && ignoreLiquid))
-        	{
-            	if((findSolid && isSolid) || (findLiquid && isLiquid))
-        		{
-            		return y;
-        		}
-            	if((findSolid && isLiquid) || (findLiquid && isSolid))
-            	{
-            		return -1;
-            	}
-        	}
+            material = (ForgeMaterialData) blockColumn[y];
+            isLiquid = material.isLiquid();
+            isSolid = material.isSolid() || (!ignoreSnow && material.isMaterial(DefaultMaterial.SNOW));
+            if(!(isLiquid && ignoreLiquid))
+            {
+                if((findSolid && isSolid) || (findLiquid && isLiquid))
+                {
+                    return y;
+                }
+                if((findSolid && isLiquid) || (findLiquid && isSolid))
+                {
+                    return -1;
+                }
+            }
         }
-    	return height;
+        return height;
     }
 
     public void setBlock(int x, int y, int z, LocalMaterialData material, NamedBinaryTag metaDataTag)
@@ -276,12 +272,28 @@ public class OTGChunkGenerator implements IChunkGenerator
         }
 
         BlockPos pos = new BlockPos(x, y, z);
+        World world = this.world.getWorld();
 
-        this.world.getWorld().setBlockState(pos, ((ForgeMaterialData) material).getBlockState(), BlockFlags.SEND_TO_CLIENTS | BlockFlags.NO_OBSERVERS);
+        Chunk chunk = world.getChunk(x >> 4, z >> 4);
+        IBlockState newState = ((ForgeMaterialData) material).getBlockState();
+        IBlockState oldState = chunk.getBlockState(pos);
+
+        boolean oldCapture = world.captureBlockSnapshots;
+        try
+        {
+            world.captureBlockSnapshots = !newState.getBlock().hasTileEntity(newState);
+            chunk.setBlockState(pos, newState);
+        }
+        finally
+        {
+            world.captureBlockSnapshots = oldCapture;
+        }
+
+        world.markAndNotifyBlock(pos, chunk, oldState, newState, 2 | 16);
 
         if(metaDataTag != null)
         {
-            TileEntity tileEntity = this.world.getWorld().getTileEntity(pos);
+            TileEntity tileEntity = world.getTileEntity(pos);
             if(tileEntity != null)
             {
                 NBTTagCompound nbtTag = NBTHelper.getNMSFromNBTTagCompound(metaDataTag);
@@ -294,13 +306,6 @@ public class OTGChunkGenerator implements IChunkGenerator
                 nbtTag = this.dataFixer.process(FixTypes.BLOCK_ENTITY, nbtTag);
                 tileEntity.readFromNBT(nbtTag);
             }
-            else
-            {
-                if(OTG.getPluginConfig().spawnLog)
-                {
-                    OTG.log(LogMarker.WARN, "Skipping tile entity with id {}, cannot be placed at {},{},{}", Optional.ofNullable(metaDataTag.getTag("id")).map(NamedBinaryTag::getValue).orElse(null), x, y, z);
-                }
-            }
         }
     }
 
@@ -309,7 +314,7 @@ public class OTGChunkGenerator implements IChunkGenerator
     @Override
     public void recreateStructures(Chunk chunkIn, int chunkX, int chunkZ)
     {
-    	this.world.recreateStructures(chunkIn, chunkX, chunkZ);
+        this.world.recreateStructures(chunkIn, chunkX, chunkZ);
     }
 
     @Override
@@ -318,38 +323,38 @@ public class OTGChunkGenerator implements IChunkGenerator
         return false;
     }
 
-	@Override
+    @Override
     public boolean isInsideStructure(World worldIn, String structureName, BlockPos pos)
     {
-		// TODO: Is it okay to not use worldIn here?
-		return this.world.isInsideStructure(structureName, pos);
+        // TODO: Is it okay to not use worldIn here?
+        return this.world.isInsideStructure(structureName, pos);
     }
 
     @Override
     public BlockPos getNearestStructurePos(World worldIn, String structureName, BlockPos blockPos, boolean p_180513_4_)
     {
-		// TODO: Is it okay to not use worldIn here?
-    	return this.world.getNearestStructurePos(structureName, blockPos, p_180513_4_);
-    }    
+        // TODO: Is it okay to not use worldIn here?
+        return this.world.getNearestStructurePos(structureName, blockPos, p_180513_4_);
+    }
 
     // Only called during generate by woodlandmansion. Don't call this anywhere else, chunkBuffer is not thread-safe and may be in use.
     public int getHighestBlockInCurrentlyPopulatingChunk(int x, int z)
     {
-    	LocalMaterialData material;
-    	for(int i = PluginStandardValues.WORLD_HEIGHT - 1; i > PluginStandardValues.WORLD_DEPTH; i--)
-    	{
-    		material = chunkBuffer.getBlock(x, i, z);
-    		if(material != null && !material.isAir())
-			{
-    			return i;
-			};
-    	}
+        LocalMaterialData material;
+        for(int i = PluginStandardValues.WORLD_HEIGHT - 1; i > PluginStandardValues.WORLD_DEPTH; i--)
+        {
+            material = chunkBuffer.getBlock(x, i, z);
+            if(material != null && !material.isAir())
+            {
+                return i;
+            };
+        }
 
-    	return 0;
-    }    
-    
+        return 0;
+    }
+
     // Mob spawning
-    
+
     @Override
     public List<SpawnListEntry> getPossibleCreatures(EnumCreatureType paramaca, BlockPos blockPos)
     {
