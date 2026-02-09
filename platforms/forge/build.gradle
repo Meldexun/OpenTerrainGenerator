@@ -1,5 +1,6 @@
 plugins {
     id 'net.minecraftforge.gradle' version "${forge_gradle_version}"
+    id 'wtf.gofancy.fancygradle' version "${fancy_gradle_version}"
 }
 
 base.archivesName = "${mod_name}-forge"
@@ -8,7 +9,28 @@ minecraft {
     mappings channel: "${forge_mappings_channel}", version: "${forge_mappings_version}"
 
     accessTransformer = file("src/main/resources/META-INF/${forge_access_transformers}")
+
+    runs {
+        client {
+            args "--username=NLBlackEagle"
+
+            workingDirectory project.file('run')
+
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'debug'
+        }
+    }
 }
+
+fancyGradle {
+    patches {
+        resources
+        coremods
+        asm
+        mergetool
+    }
+}
+
 
 repositories {
     maven { url = 'https://maven.enginehub.org/artifactory/repo/' } // worldedit
