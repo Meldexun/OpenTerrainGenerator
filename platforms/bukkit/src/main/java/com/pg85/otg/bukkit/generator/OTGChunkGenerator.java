@@ -12,19 +12,21 @@ import com.pg85.otg.configuration.world.WorldConfig;
 import com.pg85.otg.generator.ChunkProviderOTG;
 import com.pg85.otg.generator.ObjectSpawner;
 import com.pg85.otg.logging.LogMarker;
-import com.pg85.otg.util.BlockPos2D;
 import com.pg85.otg.util.ChunkCoordinate;
 import com.pg85.otg.util.LRUCache;
 import com.pg85.otg.util.bo3.NamedBinaryTag;
 import com.pg85.otg.util.minecraft.defaults.DefaultMaterial;
 
+import net.minecraft.server.v1_12_R1.Block;
 import net.minecraft.server.v1_12_R1.BlockPosition;
+import net.minecraft.server.v1_12_R1.BlockPosition.MutableBlockPosition;
 import net.minecraft.server.v1_12_R1.Blocks;
 import net.minecraft.server.v1_12_R1.Chunk;
 import net.minecraft.server.v1_12_R1.ChunkSection;
 import net.minecraft.server.v1_12_R1.DataConverter;
 import net.minecraft.server.v1_12_R1.DataConverterRegistry;
 import net.minecraft.server.v1_12_R1.DataConverterTypes;
+import net.minecraft.server.v1_12_R1.IBlockData;
 import net.minecraft.server.v1_12_R1.NBTTagCompound;
 import net.minecraft.server.v1_12_R1.TileEntity;
 
@@ -49,8 +51,8 @@ public class OTGChunkGenerator extends ChunkGenerator
     private BukkitWorld world;
     
     // Caches
-	private LRUCache<BlockPos2D, LocalMaterialData[]> unloadedBlockColumnsCache;
 	private LRUCache<ChunkCoordinate, ChunkData> unloadedChunksCache;
+    private final MutableBlockPosition pos = new MutableBlockPosition();
     //
     
     public OTGChunkGenerator(OTGPlugin _plugin, BukkitWorld world)
@@ -60,7 +62,6 @@ public class OTGChunkGenerator extends ChunkGenerator
         this.dataConverter = DataConverterRegistry.a();
         // TODO: Add a setting to the worldconfig for the size of these caches. 
         // Worlds with lots of BO4's and large smoothing areas may want to increase this. 
-        this.unloadedBlockColumnsCache = new LRUCache<BlockPos2D, LocalMaterialData[]>(1024);
         this.unloadedChunksCache = new LRUCache<ChunkCoordinate, ChunkData>(1024); //Changed 128 chunks cache to 1024 chunks cache for customstructures
     }
     
@@ -158,7 +159,7 @@ public class OTGChunkGenerator extends ChunkGenerator
             return;
         }
 
-        BlockPosition pos = new BlockPosition(x, y, z);
+        BlockPosition pos = this.pos.a(x, y, z);
 
         this.world.getWorld().setTypeAndData(pos, ((BukkitMaterialData) material).getBlockState(), 2 | 16);
 
@@ -231,35 +232,108 @@ public class OTGChunkGenerator extends ChunkGenerator
     	return this.chunkProviderOTG.getBiomeBlocksNoiseValue(blockX, blockZ);
     }    
     
+    @SuppressWarnings("deprecation")
     public LocalMaterialData getMaterialInUnloadedChunk(int x, int y, int z)
     {
-    	LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
-        return blockColumn[y];
+        Chunk chunk = this.world.getWorld().getChunkProvider().getLoadedChunkAt(x >> 4, z >> 4);
+        if(chunk != null)
+        {
+            return BukkitMaterialData.ofMinecraftBlockState(chunk.a(x & 15, y, z & 15));
+        }
+        else
+        {
+            ChunkData chunkData = this.generateChunkData(this.world.getWorld().getWorld(), null, x >> 4, z >> 4, null);
+
+            MaterialData materialData = chunkData.getTypeAndData(x & 15, y, z & 15);
+            return BukkitMaterialData.ofMinecraftBlockState(materialData.getItemTypeId(), materialData.getData());
+        }
     }
 
+    @SuppressWarnings("deprecation")
     public int getHighestBlockYInUnloadedChunk(int x, int z, boolean findSolid, boolean findLiquid, boolean ignoreLiquid, boolean ignoreSnow)
     {
-    	int height = -1;
-
-    	LocalMaterialData[] blockColumn = getBlockColumnInUnloadedChunk(x,z);
-
-        for(int y = 255; y > -1; y--)
+        Chunk chunk = this.world.getWorld().getChunkProvider().getLoadedChunkAt(x >> 4, z >> 4);
+        if(chunk != null)
         {
-        	BukkitMaterialData material = (BukkitMaterialData) blockColumn[y];
-        	boolean isLiquid = material.isLiquid();
-        	boolean isSolid = material.isSolid() || (!ignoreSnow && material.isMaterial(DefaultMaterial.SNOW));
-        	if(!(isLiquid && ignoreLiquid))
-        	{
-            	if((findSolid && isSolid) || (findLiquid && isLiquid))
-        		{
-            		return y;
-        		}
-            	if((findSolid && isLiquid) || (findLiquid && isSolid))
-            	{
-            		return -1;
-            	}
-        	}
+            ChunkSection[] sections = chunk.getSections();
+            for(int i = sections.length - 1; i >= 0; i--)
+            {
+                ChunkSection section = sections[i];
+                if(section == null)
+                {
+                    continue;
+                }
+
+                for(int j = 15; j >= 0; j--)
+                {
+                    int y = section.getYPosition() | j;
+                    IBlockData state = section.getType(x & 15, j, z & 15);
+                    if(state.getMaterial().isLiquid())
+                    {
+                        if(ignoreLiquid)
+                        {
+                            continue;
+                        }
+                        if(findLiquid)
+                        {
+                            return y;
+                        }
+                        if(findSolid)
+                        {
+                            return -1;
+                        }
+                    }
+                    else if(state.getMaterial().isSolid() && state.r() || !ignoreSnow && state.getBlock() == Blocks.SNOW)
+                    {
+                        if(findSolid)
+                        {
+                            return y;
+                        }
+                        if(findLiquid)
+                        {
+                            return -1;
+                        }
+                    }
+                }
+            }
         }
-    	return height;
+        else
+        {
+            ChunkData chunkData = this.generateChunkData(this.world.getWorld().getWorld(), null, x >> 4, z >> 4, null);
+
+            for(int y = PluginStandardValues.WORLD_HEIGHT - 1; y >= PluginStandardValues.WORLD_DEPTH; y--)
+            {
+                IBlockData state = Block.getById(chunkData.getTypeId(x & 15, y, z & 15)).fromLegacyData(chunkData.getData(x & 15, y, z & 15));
+
+                if(state.getMaterial().isLiquid())
+                {
+                    if(ignoreLiquid)
+                    {
+                        continue;
+                    }
+                    if(findLiquid)
+                    {
+                        return y;
+                    }
+                    if(findSolid)
+                    {
+                        return -1;
+                    }
+                }
+                else if(state.getMaterial().isSolid() && state.r() || !ignoreSnow && state.getBlock() == Blocks.SNOW)
+                {
+                    if(findSolid)
+                    {
+                        return y;
+                    }
+                    if(findLiquid)
+                    {
+                        return -1;
+                    }
+                }
+            }
+        }
+
+        return -1;
     }
 }
